@@ -1,0 +1,406 @@
+---
+title: "Projet Econometrie"
+author: "DJOKO FOKOU Keyssel"
+format: 
+  pdf : 
+    toc: true
+    toc-depth: 3
+    toc-expand: 1
+    toc-title: Contents
+    number-sections: true
+    css: styles.css
+editor: visual
+execute: 
+    echo: FALSE
+    warning: FALSE
+---
+
+```{r}
+library(knitr)
+library(stargazer)
+library(hrbrthemes)# pour mes couleurs et thèmes de graphiques
+library(viridis)# pour mes couleurs et thèmes de graphiques
+library(GGally) # pour la matrice de corrélation
+library(pastecs) #des tableaux de stat descriptives plus complets
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(corrplot)
+library(gridExtra)
+library(olsrr)
+library(lmtest)
+```
+
+# Introduction
+
+Le 27 juillet 2023, le projet de loi dite "Kasbarian" a été approuvé par le conseil Constitutionnel, dans un but très clair : étouffer toutes tentatives d'ouverture de "squat", ces lieux de vie occupés de manière illicites par des gens précaires cherchant des solutions pour se loger. Ce phénomène principalement observé dans les métropoles vient en réaction à une crise du logement. Cette crise est tellement présente qu des réponses d'organisation collectives face à cette crise apparaissent d'ailleurs partout en France, dont à Rennes avec l'Assemblée Logement. Si on peut se demander d'où vient cette crise, il vient assez naturellement qu'elle vient du coût du logement qui prend de plus en plus de place dans le pouvoir d'achat, du fait de son augmentation constante : "Le logement est une marchandise, il a un coût, une valeur. Conséquemment, la crise est une crise des prix, en lien avec un pouvoir d’achat logement insuffisant "(Le logement : une crise globale et individuelle, Sabrina Daine et al.). Si ce coût est de plus en plus important, on peut se demander s'il l'est de plus en plus partout. S'il y a bien des zones où les prix des loyers sont plus importants, quelles sont leur caractéristiques territoriales?
+
+Dans ce contexte, notre étude porte donc sur le prix du loyer au mètre carré des appartements dans les villes constituant les métropoles. On appelle loyer le prix mensuel du logement que l'on loue, que l'on rapporte au mètre carré. Limiter l'analyse aux métropoles permet une meilleure compréhension du phénomène urbain. Inclure tous les territoires pourrait biaiser l'analyse, car les différences se marqueraient surtout sur des caractéristiques de ruralité. De plus, nous n'étudions ici que les appartements, un type de logement plus courant en milieu urbain. Après avoir étudié la littérature, notre choix de variable détaillé par la suite se concentre autour de 2 axes : l'activité socio-économique de la commune et sa disposition géographique.
+
+# Choix et description des variables
+
+| **Variable** | **Description** | **Type** | **Source** | **Unité** |
+|----|----|----|----|----|
+| `loyer_m2` | Loyer au mètre carré estimé à partir d'annonces immobilières | Quantitative continue | INSEE / SeLoger.com / Leboncoin (T3 2023) | €/m² |
+| `med_revenu` | Médiane du niveau de vie annuel des individus (2021) | Quantitative continue | Statistiques locales de l'INSEE | € |
+| `logements_vacants` | Part des logements vacants (2021) | Quantitative continue | Observatoire des Territoires (2021) | Pourcentage (%) |
+| `densite_pop` | Densité de population (2021) | Quantitative continue | Observatoire des Territoires (2021) | Habitant/km² |
+| `si_paris` | Indicateur : 1 si commune appartient au Grand Paris, sinon 0 | Qualitative binaire | Construction interne | 1/0 |
+| `dist_metropole` | Longueur de l'itinéraire le plus proche en voiture | Quantitative continue | Construction interne | Kilomètres (km) |
+| `jeunes` | Proportion des 18-24 ans dans la commune (2021) | Quantitative continue | Observatoire des Territoires (2021) | Pourcentage (%) |
+| `temps_trajet` | Temps de trajet le plus court de la ville à la capitale de la métropole | Quantitative continue | Construction interne | Minutes |
+| `temps_tgv_paris` | Temps en minutes en TGV entre Paris et la ville principale de la métropole | Quantitative continue | Construction interne | Minutes |
+| `nouveaux_menages` | Part des ménages arrivés dans la commune il y a moins de 2 ans (2021) | Quantitative continue | Observatoire des Territoires (2021) | Pourcentage (%) |
+
+Le choix des variables a été guidé par des considérations économiques, sociales et géographiques pour expliquer les variations des loyers au mètre carré (`loyer_m2`). Cette variable cible, issue d'annonces immobilières sur SeLoger.com et Leboncoin, reflète les loyers "de flux". Bien que légèrement surévalués par rapport aux loyers en place, ces flux offrent une base uniforme pour comparer les territoires. Les données, datées du troisième trimestre 2023, incluent des approximations pour les communes sans annonces, basées sur celles de communes voisines aux caractéristiques similaires.
+
+Parmi les déterminants principaux, le revenu médian des habitants (`med_revenu`) a été intégré, car il constitue un facteur clé selon la bibliographie. Ce revenu reflète directement la capacité des habitants à payer des loyers, influençant donc les prix. En complément, la part des logements vacants (`logements_vacants`) permet d’évaluer l’offre potentielle de logements disponibles, tandis que la densité de population (`densite_pop`) capture l’impact de la pression démographique sur les prix, une population dense étant souvent associée à des loyers plus élevés.
+
+Pour isoler des particularités géographiques, une variable indicatrice a été construite. `si_paris` distingue les communes du Grand Paris où les loyers sont notoirement plus élevés. Pour évaluer les effets de la distance à la ville principale de la métropole, on a créé `dist_metropole` et \`temps_trajet\`.
+
+Enfin, certaines variables traduisent des aspects spécifiques de la demande. La proportion de jeunes âgés de 18 à 24 ans (`jeunes`) sert de proxy pour l’influence des étudiants, dont la présence peut accroître la demande locative, soutenue par des aides comme les APL. Dans un autre registre, la proportion de bénéficiaires du RSA (`beneficiaires_RSA`) explore si une population à faibles revenus exerce une pression à la baisse sur les loyers, en adaptant l’offre à cette demande spécifique.
+
+Les variables géographiques, comme le temps de trajet minimal en TGV jusqu’à Paris (`temps_tgv_paris`), mesurent l’influence de la connectivité ferroviaire sur les loyers, tandis que la proportion de ménages récents (`nouveaux_menages`) reflète l’attractivité d’une commune et la dynamique de renouvellement de sa population. Ces éléments permettent de capturer les effets conjugués de la gentrification et des migrations périurbaines, souvent observés autour des grandes villes.
+
+# Statistiques descriptives
+
+## Gestion des NA
+
+```{r}
+rm(list = ls()) #pour supprimer l'environnement, toujours utile
+```
+
+```{r}
+#on charge le fichier et on fait les ajustement de type de variables
+data <- read.csv("data_final.csv")
+
+data <- data[,-1]
+data$Code <- as.character(data$Code)
+data$med_revenu <- as.numeric(data$med_revenu)
+data$loyer_m2 <- as.numeric(data$loyer_m2)
+data$metropole <- as.factor(data$metropole)
+data$si_paris <- as.factor(data$si_paris)
+data <- data %>% 
+  select(-"beneficiaires_rsa") 
+```
+
+La première étape est de gérer le cas des valeurs manquantes.
+
+```{r}
+colSums(is.na(data))
+na_loyer_m2 <- data[which(is.na(data$loyer_m2)),]$Libellé
+data$temps_trajet[data$metropole == 1] <- 0
+na_temps_trajet <- data[which(is.na(data$temps_trajet)),]$Libellé
+data <- data[-which(data$Libellé == na_loyer_m2), ]
+na_med_revenu <- data[which(is.na(data$med_revenu)),]$Libellé
+data <- data %>%
+  mutate(
+    si_paris = case_when(
+      si_paris == 0 ~ "Autre métropole",
+      si_paris == 1 ~ "Métropole du Grand Paris",
+    )
+  )
+
+data <- data[- which(data$Libellé %in% na_med_revenu),]
+
+```
+
+On constate une valeur manquante de la variable cible dans notre base de données, qui est également manquante dans notre variable `temps_trajet`, que nous allons donc écarter. C'est la ville de `r na_loyer_m2`, dans la métropole lyonnaise qui est une fusion de deux villes qui date de 2024, sachant que nos données datent souvent de 2023. Comme il n'y en a qu'une, on peut se permettre de l'enlever. On décide également de supprimer les 7 villes présentant une valeur manquante de `med_revenu`.
+
+## Analyse univariée
+
+On regarde d'abord une distribution globale des variables.
+
+```{r}
+stargazer(data[sapply(data, is.numeric)], type = "text", summary.stat = c("mean", "sd", "min", "p25", "median", "p75", "max"), title = "Tableau 1 : Statistiques descriptives des variables quantitatives")
+```
+
+On voit dans le tableau 1 que le loyer au mètre carré est en moyenne de 13.705 euros à l'échelle des villes qui consitutent les métropoles. L'écart-type assez faible nous indique qu'une bonne partie des territoires possède le même loyer au mètre carré moyen à 3 euros près environ.
+
+## Analyse bivariée
+
+On peut regarder une distribution des variables en fonction de si on se trouve dans la métropole du grand Paris ou non.
+
+```{r}
+tapply(data$loyer_m2, data$si_paris, summary)
+```
+
+Il vient assez nettement que le loyer au m² moyen est bien plus élevé dans les villes de la capitale, avec une différence d'environ 6 euros entre le loyer au m² moyen dans la métropole Parisienne et le loyer au m² moyen dans les autres métropoles. On peut illustrer ce résultat par un graphique :
+
+```{r}
+loyer_par_ville <- data %>%
+  group_by(ville_principale) %>%
+  summarise(mean_loyer = mean(loyer_m2, na.rm = TRUE)) %>%
+  arrange(desc(mean_loyer)) # Tri par ordre décroissant
+
+# Création du graphique
+ggplot(loyer_par_ville, aes(x = reorder(ville_principale, -mean_loyer), y = mean_loyer)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(
+    x = "Ville principale",
+    y = "Loyer moyen au m²",
+    title = "Graphique 1 : Classement des villes principales par loyer moyen"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+```
+
+Le graphique 1 montre bien à quel point les loyers sont plus élevés à Paris qu'ailleurs. Il convient d'avoir une représentation graphique, dans laquelle nous allons regarder la distribution d'autres variables en fonction de si nous sommes dans la métropole du Grand Paris ou non
+
+```{r}
+data_long <- data %>%
+  select(logements_vacants, nouveaux_menages, loyer_m2, jeunes, si_paris) %>%  # Ne garder que les colonnes nécessaires
+  pivot_longer(
+    cols = c(logements_vacants, nouveaux_menages, loyer_m2, jeunes),  # Variables continues sélectionnées
+    names_to = "Variable",                    # Nom des variables continues
+    values_to = "Valeur"                      # Valeurs correspondantes
+  )
+
+ggplot(data_long, aes(x = as.factor(si_paris), y = Valeur, fill = as.factor(si_paris))) +
+  geom_boxplot() +
+  facet_grid(~Variable, scales = "free_y") +
+  labs(
+    x = "Paris ou province",
+    y = "Valeur",
+    title = "Graphque 2 : Comparaison de variables en fonction de Paris ou province"
+  ) +
+  scale_x_discrete(labels = c("Autre métropole", "Métropole du Grand Paris")) + # Ajout des labels
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(angle = 45, hjust = 1) # Labels en diagonale
+  )
+
+
+```
+
+Il est clair que le loyer au mètre carré est bien plus élevé dans la métropole du Grand Paris que dans les autres métropoles (Graphique 2). On note également que les jeunes habitent en moyenne un peu plus à Paris que dans les autres métropoles.
+
+Il apparait que parmi les liens de corrélation avec la variable `si_paris`, le plus élevé est de loin celui avec le loyer au mètre carré, ce qui nous évite un problème de colinéarité avec cette variable.
+
+Il faut à présent regarder les corrélation entre les autres variables entre elles.
+
+```{r}
+data_numeric <- data %>% 
+  select(where(is.numeric))
+corrplot(cor(data_numeric), method = "number")  
+title("Tableau 2 : Matrice de corrélation des variables quantitatives")
+```
+
+D'après le tableau 2, le loyer au mètre carré est corrélé positivement très fortement avec la densité de population. La relation légèrement positive entre le loyer au mètre carré et le temps de trajet depuis la capitale de la métropole interroge, car on pourrait s'attendre à ce que plus on s'éloigne de la ville, plus les prix baissent.
+
+On remarque une corrélation négative entre la densité de population et le temps en TGV pour aller à paris, qui s'explique car pour toutes les communes de la métropole du Grand Paris la valeur de cette variable est égale à 0.
+
+Comme on pouvait s'en douter du fait que les jeunes changent souvent de lieu de vie, on détecte une corrélation assez forte entre la part de nouveaux ménages et la part de jeunes, ce qui pourrait entrainer un problème de colinéarité dans notre régression.
+
+```{r}
+p1 <- ggplot(data, aes(x = densite_pop, y = loyer_m2)) +
+  geom_point(alpha = 0.6, color = "black") +
+  labs(
+    x = "Densité de population",
+    y = "Loyer au m²",
+    title = "Graphique 3 : Relation entre densité de population et loyer au m², densite_pop < 500"
+  ) +
+  theme_minimal()
+
+p2 <- ggplot(data[data$densite_pop < 5000,], aes(x = densite_pop, y = loyer_m2)) +
+  geom_point(alpha = 0.6, color = "black") +
+  labs(
+    x = "Densité de population",
+    y = "Loyer au m²",
+    title = "Graphique 4 : Relation entre densité de population et loyer au m², densite_pop < 5000"
+  ) +
+  theme_minimal()
+
+
+grid.arrange(p1, p2)
+
+
+p3 <- ggplot(data, aes(x = temps_trajet, y = loyer_m2)) +
+  geom_point(alpha = 0.6, color = "black") +
+  labs(
+    x = "Temps de trajet à la métropole",
+    y = "Loyer au m²",
+    title = "Graphique 5"
+  ) +
+  theme_minimal()
+
+p4 <- ggplot(data, aes(x = nouveaux_menages, y = loyer_m2)) +
+  geom_point(alpha = 0.6, color = "black") +
+  labs(
+    x = "Part de nouveaux ménages",
+    y = "Loyer au m²",
+    title = "Graphique 6"
+  ) +
+  theme_minimal()
+
+grid.arrange(p3, p4, ncol = 2)
+
+```
+
+Si la relation entre densité de population semble linéaire et positive, on note un clair problème d'hétéroscédasticité, car la plupart des individus ont une densité de population inférieure à 5 000. Ainsi en regardant de plus près, on constate que cette relation positive n'est vraie que pour les individus ayant une densité de population supérieure à 5000 (graphiques 3 et 4). Les graphiques 5 et 6 montrent également des relations non linéaires entre le temps de trajet et le loyer au mètre carré, et entre la part de nouveaux ménages et le loyer au mètre carré.
+
+# Régressions
+
+## Première approche
+
+Nous allons commencer par une régression simple avec toutes les variables, avec pour formule:
+
+$loyer_{m2} = \beta_0 + \beta_1 \cdot logements\_vacants + \beta_2 \cdot med\_revenu + \beta_3 \cdot jeunes + \beta_4 \cdot nouveaux\_menages + \beta_5 \cdot densite\_pop + \beta_6 \cdot si\_paris + \beta_7 \cdot temps\_tgv\_paris + \beta_8 \cdot dist\_metropole + \beta_9 \cdot temps\_trajet$.
+
+La deuxième a pour formule : $loyer_{m2} = \beta_0 + \beta_1 \cdot logements\_vacants + \beta_2 \cdot med\_revenu \beta_3 \cdot nouveaux\_menages + \beta_4 \cdot densite\_pop + \beta_5 \cdot si\_paris + \beta_6 \cdot temps\_tgv\_paris + \beta_7 \cdot dist\_metropole + \beta_8 \cdot temps\_trajet$.
+
+La troisième a pour formule : $loyer_{m2} = \beta_0 + \beta_1 \cdot logements\_vacants + \beta_2 \cdot med\_revenu \beta_3 \cdot nouveaux\_menages + \beta_4 \cdot densite\_pop + \beta_5 \cdot si\_paris + \beta_6 \cdot temps\_tgv\_paris + \beta_7 \cdot dist\_metropole + \beta_8 \cdot temps\_trajet$ + $\beta_9 \cdot nouveaux\_menages \cdot metropole$.
+
+```{r}
+data$med_revenu_m <- data$med_revenu/1000 # parler en variations de 1000 euros est plus parlant pour la regression
+data$densite_pop_m <- data$densite_pop/100 #parler de variations de 100 personnes de plus ou moins, au vu de la distribution, est plus parlant pour la régression
+data$temps_tgv_paris <- data$temps_tgv_paris / 60 #on passe en heure pour une meilleure interprétation
+data$dist_metropole_m <- data$dist_metropole / 10
+data$temps_trajet_m <- data$temps_trajet / 10
+#summary(data$densite_pop)
+```
+
+Pour notre régression, nous allons modifier les variables pour une meilleure lisibilité.
+
+```{r}
+reg1 <- lm( loyer_m2 ~ logements_vacants + med_revenu_m + jeunes + nouveaux_menages + densite_pop_m + si_paris + temps_tgv_paris + dist_metropole_m + temps_trajet_m, data=data)
+
+reg2 <- lm( loyer_m2 ~ logements_vacants + med_revenu_m + nouveaux_menages + densite_pop_m + si_paris + temps_tgv_paris + temps_trajet_m + dist_metropole_m, data=data)
+
+reg3 <- lm( loyer_m2 ~ logements_vacants + med_revenu_m + nouveaux_menages + densite_pop_m + si_paris + temps_tgv_paris + temps_trajet_m + dist_metropole_m + nouveaux_menages*metropole, data=data)
+
+stargazer(reg1, reg2, reg3, type = "text",
+          title = "Régressions avec toutes les variables | sans variable non significative | avec effet croisés",
+          column.labels = c("Toutes les variables", "Seulement variables significatives", "Avec effet croisé"),
+          digits = 3)
+```
+
+Notre premier modèle explique 72,8% de la variance du loyer au m². On peut dire que ce modèle est globalement valide avec le test de Fisher. Simplement, toutes les variables ne sont pas significatives. Nous pouvons enlever `jeunes`, qui n'est pas représentative dans cette régression.
+
+Le revenu médian des habitants (`med_revenu_m`), exprimé en milliers d'euros, conserve un effet positif significatif. Une augmentation de 1 000 € du revenu médian est associée à une hausse de 0,235 € du loyer au m². Cela confirme que les loyers sont directement influencés par le niveau de vie des habitants, qui détermine leur capacité à payer.
+
+La proportion de ménages arrivés récemment (`nouveaux_menages`), indicatrice de l'attractivité d'une commune, a également un effet significatif : une augmentation de 1 % de ménages récents est liée à une hausse de 0,083 € du loyer. Ces résultats suggèrent que les territoires attractifs, accueillant de nouveaux arrivants, subissent une pression accrue sur leur marché locatif.
+
+Avec une transformation en centaines d’habitants par km², la densité de population (`densite_pop_m`) montre qu’une augmentation de 100 habitants par km² est associée à une hausse de 0,037 € du loyer. Ce résultat met en évidence l'effet des dynamiques urbaines sur la demande locative.
+
+Du côté de l’accessibilité géographique, le temps de trajet en TGV vers Paris (temps_tgv_paris), maintenant exprimé en heures, a un effet significatif. Une réduction d’une heure de trajet est associée à une hausse de 0,672 € du loyer, soulignant l’importance de la connexion à la capitale dans la valorisation des biens immobiliers.
+
+Pour la distance au centre métropolitain (`dist_metropole_m`), exprimée en dizaines de kilomètres, une augmentation de 10 km est associée à une hausse de 0,327 € du loyer. En parallèle, le temps de trajet en voiture vers la capitale métropolitaine (`temps_trajet_m`), réduit à des variations de 10 minutes, montre qu’une augmentation de 10 minutes est associée à une baisse de 0,449 € du loyer. Cela reflète une perte d’attractivité pour les communes plus éloignées des centres métropolitains. Il est à noter que ces variables ne sont significatives que si on les inclue de paire dans la régression. Leur effet est donc plutôt à interpréter ensemble. Il y a une dimension d'efficacité des infrastructures dans l'interprétation : plus je mets de temps à parcourir la distance, moins le loyer au mètre carré va être cher dans la commune (coefficient `temps_de_trajet_m` négatif).
+
+Enfin, la part des logements vacants (`logements_vacants`) continue d’avoir un effet négatif significatif. Une augmentation de 1 % de logements vacants est associée à une baisse de 0,103 € du loyer, traduisant l’effet d’une sur-offre sur le marché.
+
+L’effet le plus fort reste celui de la variable indicatrice `si_paris`. Être situé dans la métropole du Grand Paris augmente le loyer moyen de 6,46 € par m², toutes choses égales par ailleurs. Ce résultat reflète l’attractivité unique de la région parisienne, où la demande de logements dépasse largement l’offre, entraînant des prix nettement supérieurs à ceux des autres métropoles.
+
+Nous ajoutons une interaction entre la part de nouveaux ménages et la variable métropole afin d’examiner si leur impact sur les loyers varie selon le contexte, entre les métropoles et les zones non métropolitaines. Dans les zones non métropolitaines, une augmentation d'une unité de nouveaux ménages entraîne une hausse moyenne des loyers de 0,102 €/m², tandis que dans les métropoles, cet effet diminue de 0,272 €/m², devenant ainsi négatif à -0,17 €/m² (0,102 − 0,272). Cela révèle des dynamiques distinctes : dans les métropoles, la part de nouveaux ménages indique la taille du flux d'entrée et de sortie (souvent des étudiants et des jeunes), limitant l’effet sur les loyers, alors que dans les zones non métropolitaines, elle indique l'attractivité d'un territoire. Ainsi, dans les métropoles, plus il y a de flux, ou plus la ville est étudiante, moins les loyers sont onéreux. Tandis que dans les zones non métropolitaines, plus la zone est attractive, plus les loyers sont onéreux. Une étude plus poussée avec la part de béénficiaires des APL pourrait affiner cette analyse.
+
+## Gestion de l'hétéroscédasticité
+
+Il est important de vérifier l'hétéroscédasticité dans les données que nous avons pressenti dans l'analyse descriptive précédemment.
+
+```{r}
+## Distance de Cook: mesure l'influence d'une observation, les valeurs supérieures à 1 ou parfois à 0,5 indique un point influent
+plot(reg3, which = 4)
+title("Graphique 7 : Distance de Cook")
+
+## Levier: mesure l'influence d'une observation sur la régression, les valeurs supérieures à 2(p+1)/n indique un point de levier
+plot(reg3, which = 5)
+title("Graphique 8 : Résidus standardisés en fonction leur levier")
+aberr1 <- data$Libellé[72]
+aberr2 <- data$Libellé[501]
+aberr3 <- data$Libellé[892]
+
+```
+
+On n'observe pas de points influents dans notre régression. Si certaines valeurs dénottent, comme les villes de `r aberr1`, `r aberr3` (communes avec un loyer au m² faible comparativement aux autres communes de leurs métropoles) qui ont un fort point de levier, et `r aberr2` (commune de bord de mer, très riche, frontalière de Monaco, avec un loyer au m² de 10 euros plus cher que les autres villes de la métropole de Nice) qui a un résidu standardisé très élevé, elles ne sont pas suffisamment influentes pour être retirées de notre régression, comme le montre les faibles distances de Cook. Nous pourrons cependant lancer une régression robuste pour vérifier si ces points ne sont pas influents.
+
+```{r, fig.show='hide'}
+hist_res <- ols_plot_resid_hist(reg3, )     # Histogramme des résidus
+quant_quant <- ols_plot_resid_qq(reg3)       # Graphique quantile-quantile des résidus
+
+```
+
+```{r}
+quant_quant + ggtitle("Graphique 9 : Quantile-quantile des résidus")
+hist_res + ggtitle("Graphique 10 : Histogramme des résidus")
+
+```
+
+```{r}
+#moyennes = 0
+# Test (H0: moyenne résidus = 0; H1: moyenne résidus <> 0)
+t.test(reg3$residuals)
+# la moyenne estimé est de -1,69e-17, l'intervalle de confiance contient la valeur nulle et la pvalue du test =1, au seuil de significativité de 0.1% on ne peut pas rejeter l’hypothèse que la moyenne des résidus soit nulle
+
+# test de normalité des résidus = shapiro : hypothèse nulle = normalité
+shapiro.test(reg3$residuals)
+```
+
+La moyenne des résidus est statistiquement égale à 0, d'après le test de moyenne nulle. On ne rejette pas H0 car la p-value est égale à 1. C'est ce que l'on attend et que l'on pouvait observer dans le graphique . Cependant, le test de Shapiro-Wilk rejette l'hypothèse de normalité des résidus. L'hétéroscédasticité des résidus est bien visible dans les graphiques 7 et 8, avec une dispersion inégale des résidus dans l'histogramme et avec les queues du qqplot qui ne suivent pas la droite de normalité. Nous pouvons donc effectuer un test de White par la suite pour confirmer notre hypothèse.
+
+```{r}
+
+
+bptest(reg3)
+
+print("Test de White avec carrés des variables")
+white_test <- bptest(reg3, 
+                     ~ logements_vacants + med_revenu_m + nouveaux_menages + densite_pop_m + si_paris + temps_tgv_paris + dist_metropole_m + temps_trajet_m + 
+                       I(logements_vacants^2) + I(med_revenu_m^2) + I(nouveaux_menages^2) + I(densite_pop_m^2) + 
+                       I(temps_tgv_paris^2) + I(dist_metropole_m^2) + I(temps_trajet_m^2), 
+                     data = data)
+white_test
+# 
+# #Commentaires : la pvaleur est encore plus inférieur à 5%, on rejette l'hypothèse nulle selon laquelle les résidus ont une variance homogéne au seuil de signification de 5%. les aléas sont hétéroscédastiques.
+# 
+# # Test de goldfeld et Quandt sur le niveau de richesse GDP_PC_PPP
+print("Test de Goldfeld et Quandt sur le temps de trajet depuis Paris en TGV")
+gqtest(reg3, order.by = ~ temps_tgv_paris, fraction = 6, data=data)
+print("Test de Goldfeld et Quandt sur la temps de trajet en voiture à la métropole")
+gqtest(reg3, order.by = ~ temps_trajet_m, fraction = 6, data=data)
+
+# #commenter les résultats du tests et comparer au test de White
+
+```
+
+Le test de Breusch-Pagan rejette l'hypothèse nulle d'homoscédasticité des résidus. Le test de White, pour lequel nous n'avons pas utilisé les effets croisés mais simplement les carrés des variables, confirme ce résultat. Nous avons donc une hétéroscédasticité dans notre régression. En utilisant le test de Goldfeld et Quandt, nous pouvons voir que l'hétéroscédasticité est plus forte pour les communes les plus éloignées de la capitale de la métropole, ou de Paris, et que donc c'est le `temps_trajet_m` et le `temps_tgv_paris` qui sont les variables qui expliquent le plus l'hétéroscédasticité de notre régression. Nos hypothèses faites durant la première partie de l'analyse descriptive ne sont donc pas toutes confirmées.
+
+À présent, nous allons effectuer une régression robuste à l'hétéroscedasticité et une régression MCG pour comparer les résultats.
+
+```{r}
+data$temps_trajet_m[data$temps_trajet_m <= 0] <- 0.01
+data$temps_tgv_paris[data$temps_tgv_paris <= 0] <- 0.01
+
+reg_MCG <- lm( loyer_m2 ~ logements_vacants + med_revenu_m + nouveaux_menages + densite_pop_m + si_paris + temps_tgv_paris + dist_metropole_m + temps_trajet_m + metropole*nouveaux_menages, data = data, weights=(1/(temps_trajet_m + temps_tgv_paris)))
+
+library(car)
+#fonction hccm pour recalculer la matrice de variance covariance avec différentes correction hc0, hc1, hc2, hc3, ...
+#la correction hc0 correspond à la simple correction de white
+
+cov_robuste_hc0 <- hccm(reg3, type="hc0")  #il existe différent type le hc1 correspond a la correction vue en cours
+
+reg_robuste_hc0= coeftest(reg3, vcov = cov_robuste_hc0)
+
+#affichage des modèles avec le package stargazer
+stargazer(reg3, reg_MCG, reg_robuste_hc0,
+  title="Comparaison de l'estimation MCO, MCG et MCO correction WHITE",
+  type="text", 
+  digits=3, 
+  column.labels=c("MCO", "MCG", "MCOWhite"),
+  dep.var.labels.include = FALSE,
+  model.numbers = FALSE,
+  dep.var.caption="Variable dépendante : 'Loyer au mètre carré'",
+  model.names=FALSE) 
+
+#Commentaires : les paramètres sont sans biais, cette méthode permet de recalculer la variance des paramètres = certaines variables sont moins ou plus significatives
+```
+
+L’analyse des résultats montre des variations notables entre les trois méthodes d’estimation utilisées (MCO, MCG et MCO avec correction de White). Tout d’abord, le coefficient de détermination passe de 73,4 % avec les MCO à 95,4 % avec les MCG, suggérant une très forte amélioration de l’ajustement du modèle. Cette augmentation importante peut être interprétée comme une meilleure prise en compte des spécificités des données, notamment grâce aux pondérations liées à l’hétéroscédasticité. Cependant, elle pourrait également indiquer un risque de sur-ajustement qui nécessiterait une validation externe, ce qui ici nous empêche de tirer de réelles conclusions.
+
+Les coefficients des variables restent relativement stables entre les trois modèles, mais les erreurs standards sont notablement réduites avec les MCG, renforçant la précision des estimations. Par exemple, les erreurs associées à des variables comme `temps_tgv_paris` ou `metropole1` diminuent considérablement sous l’effet des pondérations. Enfin, la correction de White appliquée aux MCO n’altère pas les coefficients estimés mais ajuste légèrement les erreurs standards, ce qui modifie subtilement la significativité de certaines variables. Cependant, il faut tout de même signifier que toutes les variables restent bel et bien significatives dans les trois modèles.
+
+# Conclusion
+
+Notre analyse des déterminants des loyers au mètre carré dans les métropoles françaises a permis de mettre en lumière plusieurs facteurs clés. Le revenu médian des habitants, la proportion de nouveaux ménages, la densité de population, l’accessibilité géographique et la part de logements vacants ont tous un impact significatif sur les loyers. En particulier, la localisation dans la métropole du Grand Paris est le facteur le plus déterminant, avec des loyers nettement plus élevés que dans les autres métropoles.
+
+Cette analyse permet d'observer des dynamiques globales sur le loyer au mètre carré, mais il est important de garder à l'esprit les limites de notre travail. Les données utilisées, bien que récentes, sont des estimations basées sur des annonces immobilières, qui peuvent ne pas refléter exactement la réalité des loyers en place, du fait de l'estimation mais surtout du fait de l'effet d'annonce (les villes ayant peu d'annonces ont un estimateur beaucoup moins robustes, et les autres sont calculés uniquement sur les annonces en vigueuret pas de tous les biens loués). De plus, certaines variables auraient pu apporter beaucoup à notre modèle, comme la part de bénéficiaires des APL : est-ce que cette allocation fait monter les loyers et à quel point? Il est nécessaire de considérer ces limites pour permettre l'avancée des travaux de recherches économétriques sur le sujet, afin de donner les clefs d'amélioration.
